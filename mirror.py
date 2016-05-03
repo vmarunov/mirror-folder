@@ -1,9 +1,13 @@
+# coding=utf-8
 __author__ = 'Vladimir'
 
 import argparse
 import os
 import sys
 import shutil
+import locale
+
+lang, default_locale = locale.getdefaultlocale()
 
 
 def is_close(a, b, rel_tol=1e-09, abs_tol=0.0):
@@ -22,14 +26,14 @@ class FolderInfo:
         return False
 
     def get_full_name(self):
-        return os.path.join(os.path.join(self.root, self.rel_path), self.name)
+        return os.path.join(self.root, self.rel_path, self.name)
 
     def delete(self):
         full_name = self.get_full_name()
         try:
-            os.rmdir(full_name)
-        except Exception as e:
-            print('Error delete folder {}: {}'.format(full_name, e))
+            shutil.rmtree(full_name, ignore_errors=True)
+        except Exception as ex:
+            print('Error delete folder {}: {}'.format(full_name.encode(default_locale), ex))
 
 
 class FileInfo(FolderInfo):
@@ -49,27 +53,29 @@ class FileInfo(FolderInfo):
         full_name = self.get_full_name()
         try:
             os.remove(full_name)
-        except Exception as e:
-            print('Error delete file {}: {}'.format(full_name, e))
+        except Exception as ex:
+            print('Error delete file {}: {}'.format(full_name.encode(default_locale), ex))
 
     def copy_to(self, folder):
         source_file = self.get_full_name()
         destination_file = os.path.join(folder, self.name)
         try:
             shutil.copy2(source_file, destination_file)
-        except Exception as e:
-            print('Error copy {} to {}: {}'.format(source_file, destination_file, e))
+        except Exception as ex:
+            print('Error copy {} to {}: {}'.format(source_file.encode(default_locale),
+                                                   destination_file.encode(default_locale), ex))
 
 
 def list_dir(folder):
     result_files = {}
     result_folders = {}
-    for root, folders, files in os.walk(folder):
+    for root, folders, files in os.walk(unicode(folder)):
         for current_file in files:
             relative_path = os.path.relpath(root, folder)
             if relative_path == '.':
                 relative_path = ''
-            stat = os.stat(os.path.join(root, current_file))
+            full_file = os.path.join(root, current_file)
+            stat = os.stat(full_file.encode(sys.getfilesystemencoding()))
             key = os.path.join(relative_path, current_file)
             result_files[key] = FileInfo(folder, relative_path, current_file, stat.st_size, stat.st_mtime, None)
         for current_folder in folders:
@@ -94,11 +100,11 @@ is_test = args.test
 is_quiet = args.quiet
 
 if not os.path.isdir(source_dir):
-    print('Directory {} not exists'.format(source_dir))
+    print('Directory {} not exists'.format(source_dir.encode(default_locale)))
     sys.exit(0)
 
 if os.path.exists(dest_dir) and not os.path.isdir(dest_dir):
-    print('{} is nod directory'.format(dest_dir))
+    print('{} is nod directory'.format(dest_dir.encode(default_locale)))
     sys.exit(0)
 
 source_folder_list, source_file_list = list_dir(source_dir)
@@ -108,7 +114,7 @@ dest_folder_list, dest_file_list = list_dir(dest_dir)
 for file_name, dest_object in dest_file_list.items():
     if file_name not in source_file_list or not dest_object.is_equals(source_file_list[file_name]):
         if not is_quiet:
-            print('Delete file {}'.format(dest_object.get_full_name()))
+            print('Delete file {}'.format(dest_object.get_full_name().encode(default_locale)))
         if not is_test:
             dest_object.delete()
         del dest_file_list[file_name]
@@ -117,7 +123,7 @@ for file_name, dest_object in dest_file_list.items():
 for folder_name, dest_object in dest_folder_list.items():
     if folder_name not in source_folder_list:
         if not is_quiet:
-            print('Delete folder {}'.format(dest_object.get_full_name()))
+            print('Delete folder {}'.format(dest_object.get_full_name().encode(default_locale)))
         if not is_test:
             dest_object.delete()
         del dest_folder_list[folder_name]
@@ -127,18 +133,20 @@ for folder_name, source_object in source_folder_list.items():
     if folder_name not in dest_folder_list:
         full_folder = os.path.join(dest_dir, folder_name)
         if not is_quiet:
-            print('Create folder {}'.format(full_folder))
+            print('Create folder {}'.format(full_folder.encode(default_locale)))
         if not is_test:
-            try:
-                os.makedirs(full_folder)
-            except Exception as e:
-                print('Error create directory {}: {}'.format(full_folder, e))
+            if not os.path.isdir(full_folder):
+                try:
+                    os.makedirs(full_folder)
+                except Exception as e:
+                    print('Error create directory {}: {}'.format(full_folder.encode(default_locale), e))
 
 # Copy files
 for file_name, source_object in source_file_list.items():
     if file_name not in dest_file_list:
         dest_folder = os.path.join(dest_dir, source_object.rel_path)
         if not is_quiet:
-            print('Copy file {} to {}'.format(source_object.get_full_name(), dest_folder))
+            print('Copy file {} to {}'.format(source_object.get_full_name().encode(default_locale),
+                                              dest_folder.encode(default_locale)))
         if not is_test:
             source_object.copy_to(dest_folder)
